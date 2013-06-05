@@ -25,7 +25,6 @@ common.createConnection(function (err, db) {
 			Contact.create( data, function(err, items) {
 				if (err) throw err;
 				assert(items[0].poc, 'John Doe');
-				db.close();
 			});
 			
 		}

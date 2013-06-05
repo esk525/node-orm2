@@ -33,7 +33,7 @@ An example:
 var orm = require("orm");
 
 orm.connect("mysql://username:password@host/database", function (err, db) {
-  if (err) throw err;
+	if (err) throw err;
 
 	var Person = db.define("person", {
 		name      : String,
@@ -114,16 +114,6 @@ orm.connect("....", function (err, db) {
 
 ## Connecting
 
-First, add the correct driver to your `package.json`:
-
- driver                | dependency
-:----------------------|:---------------------------
- mysql                 | `"mysql" : "2.0.0-alpha7"`
- postgres<br/>redshift | `"pg": "~1.0.0"`
- sqlite                | `"sqlite3" : "2.1.7"`
-
-### Options
-
 You can pass in connection options either as a string:
 
 ```js
@@ -147,7 +137,7 @@ var opts = {
   user     : "..",
   password : "..",
   query    : {
-    pool     : true|false,   // optional, false by default
+    pool     : true|false    // optional, false by default
     debug    : true|false    // optional, false by default
   }
 };
@@ -191,27 +181,40 @@ var Person = db.define('person', {        // 'person' will be the table in the d
 
 #### Types
 
+Available native object types are:
 
- Native   | String     | Native   | String
- :--------|:-----------|:---------|:---------
- String   | 'text'     | Date     | 'date '
- Number   | 'number'   | Object   | 'object'
- Boolean  | 'boolean'  | Buffer   | 'binary'
-          |            |  ---     | 'enum'
+`String, Number, Boolean, Date, Object, Buffer`
+
+If defining properties using the latter object syntax, the types are:
+
+`text, number, boolean, date, enum, object, binary`
 
 #### Options
 
 ##### [all types]
 * `required`: true marks the column as `NOT NULL`, false (default)
 * `defaultValue`: sets the default value for the field
+*  `coldef.driver`: a driver specific number column definition to override defaults used by driver (current drivers: mysql, postgres, sqlite)
+
+```js
+var Person = db.define('person', {        // 'person' will be the table in the database as well as the model id
+	// properties
+	name    : String,                     // you can use native objects to define the property type
+	surname : { type: "text", size: 50 },  // or you can be specific and define aditional options
+  height  : { type: "number", coldef: { postgres: "numeric (3,2)", mysql: "numeric (3,2)" } //specify exact type to use in CREATE COLUMN DEFINTION
+}, {
+	// options (optional)
+});
+```
 
 ##### string
 * `size`: max length of the string
 
 ##### number
 * `rational`: true (default) creates a FLOAT/REAL, false an INTEGER
-* `size`: byte size of number, default is 4. Note that 8 byte numbers [have limitations](http://stackoverflow.com/questions/307179/what-is-javascripts-max-int-whats-the-highest-integer-value-a-number-can-go-t)
+* `size` or `length`: length property for INTEGER
 * `unsigned`: true to make INTEGER unsigned, default is false
+
 
 ##### date
 * `time`: true (default) creates a DATETIME/TIMESTAMP, false a DATE
@@ -359,35 +362,12 @@ Currently the following events are supported:
 - `afterLoad` : (no parameters) Right after loading and preparing an instance to be used;
 - `beforeSave` : (no parameters) Right before trying to save;
 - `afterSave` : (bool success) Right after saving;
-- `beforeCreate` : (no parameters) Right before trying to save a new instance (prior to `beforeSave`);
+- `beforeCreate` : (no parameters) Right before trying to save a new instance;
 - `afterCreate` : (bool success) Right after saving a new instance;
-- `beforeRemove` : (no parameters) Right before trying to remove an instance;
+- `beforeRemove` : (no parameters) Right before trying to remove an instance.
 - `afterRemove` : (bool success) Right after removing an instance;
-- `beforeValidation` : (no parameters) Before all validations and prior to `beforeCreate` and `beforeSave`;
 
 All hook function are called with `this` as the instance so you can access anything you want related to it.
-
-For all `before*` hooks, you can add an additional parameter to the hook function. This parameter will be a function that
-must be called to tell if the hook allows the execution to continue or to break. You might be familiar with this workflow
-already from Express. Here's an example:
-
-```js
-var Person = db.define("person", {
-	name    : String,
-	surname : String
-}, {
-	hooks: {
-		beforeCreate: function (next) {
-			if (this.surname == "Doe") {
-				return next(new Error("No Does allowed"));
-			}
-			return next();
-		}
-	}
-});
-```
-
-This workflow allows you to make asynchronous work before calling `next`.
 
 ## Finding Items
 
@@ -462,11 +442,7 @@ Person.aggregate({ surname: "Doe" }).min("age").max("age").get(function (err, mi
 	console.log("The youngest Doe guy has %d years, while the oldest is %d", min, max);
 });
 ```
-
-An `Array` of properties can be passed to select only a few properties. An `Object` is also accepted to define conditions.
-
-Here's an example to illustrate how to use `.groupBy()`:
-
+Here's an example to illustrate how to use groupby:
 ```js
 //The same as "select avg(weight), age from person where country='someCountry' group by age;"
 Person.aggregate(["age"], { country: "someCountry" }).avg("weight").groupBy("age").get(function (err, stats) {
@@ -474,12 +450,7 @@ Person.aggregate(["age"], { country: "someCountry" }).avg("weight").groupBy("age
 });
 ```
 
-### Base `.aggregate()` methods
-
-- `.limit()`: you can pass a number as a limit, or two numbers as offset and limit respectively
-- `.order()`: same as `Model.find().order()`
-
-### Additional `.aggregate()` methods
+Possible aggregating functions:
 
 - `min`
 - `max`
@@ -487,7 +458,11 @@ Person.aggregate(["age"], { country: "someCountry" }).avg("weight").groupBy("age
 - `sum`
 - `count` (there's a shortcut to this - `Model.count`)
 
-There are more aggregate functions depending on the driver (Math functions for example).
+### Available options
+
+- `offset`: discards the first `N` elements
+- `limit`: although it can be passed as a direct argument, you can use it here if you prefer
+- `only`: if you don't want all properties, you can give an array with the list of properties you want
 
 #### Chaining
 
@@ -583,12 +558,6 @@ var Person = db.define('person', {
 	name    : String
 }, {
 	cache   : false
-});
-```
-and also globally:
-```js
-orm.connect('...', function(err, db) {
-  db.settings.set('instance.cache', false);
 });
 ```
 
@@ -724,81 +693,36 @@ orm.connect("....", function (err, db) {
 
 An association is a relation between one or more tables.
 
-### hasOne
-Is a **many to one** relationship. It's the same as **belongs to.**<br/>
-Eg: `Animal.hasOne('owner', Person)`.<br/>
-Animal can only have one owner, but Person can have many animals.<br/>
-Animal will have the `owner_id` property automatically added.
+## hasOne vs. hasMany
 
-The following functions will become available:
-```js
-animal.getOwner(function..)         // Gets owner
-animal.setOwner(person, function..) // Sets owner_id
-animal.hasOwner(function..)         // Checks if owner exists
-animal.removeOwner()                // Sets owner_id to 0
-```
+Since this topic brings some confusion to many people including myself, here's a list of the possibilities
+supported by both types of association.
 
-**Reverse access**
-```js
-Animal.hasOne('owner', Person, {reverse: 'pets'})
-```
-will add the following:
-```js
-person.getPets(function..)
-person.setPets(cat, function..)
-```
+- `hasOne` : it's a **Many-to-One** relationship. A.hasOne(B) means A will have one (or none) of B, but B can be
+  associated with many A;
+- `hasMany`: it's a **One-to-Many** relationship. A.hasMany(B) means A will have none, one or more of B. Actually
+  B will be associated with possibly many A but you don't have how to find it easily (see next);
+- `hasMany` + reverse: it's a **Many-to-Many** relationship. A.hasMany(B, { reverse: A }) means A can have none or
+  many B and also B can have none or many A. Accessors will be created in both models so you can manage them from
+  both sides.
 
-
-### hasMany
-Is a **many to many** relationship (includes join table).<br/>
-Eg: `Patient.hasMany('doctors', Doctor, { why: String }, { reverse: 'patients' })`.<br/>
-Patient can have many different doctors. Each doctor can have many different patients.
-
-This will create a join table `patient_doctors` when you call `Patient.sync()`:
-
- column name | type
- :-----------|:--------
- patient_id  | Integer
- doctor_id   | Integer
- why         | varchar(255)
-
-The following functions will be available:
-```js
-patient.getDoctors(function..)           // List of doctors
-patient.addDoctors(docs, function...)    // Adds entries to join table
-patient.setDoctors(docs, function...)    // Removes existing entries in join table, adds new ones
-patient.hasDoctors(docs, function...)    // Checks if patient is associated to specified doctors
-patient.removeDoctors(docs, function...) // Removes specified doctors from join table
-
-doctor.getPatients(function..)
-etc...
-```
-
-To associate a doctor to a patient:
-```js
-patient.addDoctor(surgeon, {why: "remove appendix"}, function(err) { ... } )
-```
-which will add `{patient_id: 4, doctor_id: 6, why: "remove appendix"}` to the join table.
-
-### Examples & options
-
-If you have a relation of 1 to n, you should use `hasOne` (belongs to) association.
+If you have a relation of 1 to 0 or 1 to 1, you should use `hasOne` association. This assumes a column in the model that has the id of the other end of the relation.
 
 ```js
 var Person = db.define('person', {
-    name : String
+	name : String
 });
 var Animal = db.define('animal', {
-    name : String
+	name : String
 });
-Animal.hasOne("owner", Person); // creates column 'owner_id' in 'animal' table
+Animal.hasOne("owner", Person); // assumes column 'owner_id' in 'animal' table
 
 // get animal with id = 123
-Animal.get(123, function (err, animal) {
-    // animal is the animal model instance, if found
-    Foo.getOwner(function (err, person) {
-        // if animal has really an owner, person points to it
-    });
+Animal.get(123, function (err, Foo) {
+	// Foo is the animal model instance, if found
+	Foo.getOwner(function (err, John) {
+		// if Foo animal has really an owner, John points to it
+	});
 });
 ```
 
@@ -813,32 +737,46 @@ If you prefer to use another name for the field (owner_id) you can change this p
 db.settings.set("properties.association_key", "id_{name}"); // {name} will be replaced by 'owner' in this case
 ```
 
-**Note: This has to be done before the association is specified.**
+**Note: This has to be done prior to the association creation.**
 
-The `hasMany` associations can have additional properties in the association table.
+For relations of 1 to many you have to use `hasMany` associations. This assumes the existence of a separate join table that has 2 columns, each referencing the table in the association. Ideally, these would be foreign key relationships in your database.
 
 ```js
 var Person = db.define('person', {
-    name : String
+	name : String
+});
+Person.hasMany("friends"); // omitting the other Model, it will assume self model
+
+Person.get(123, function (err, John) {
+	John.getFriends(function (err, friends) {
+		// assumes table person_friends with columns person_id and friends_id
+	});
+});
+```
+
+The `hasMany` associations can have additional properties that are assumed to be in the association table.
+
+```js
+var Person = db.define('person', {
+	name : String
 });
 Person.hasMany("friends", {
     rate : Number
 });
 
 Person.get(123, function (err, John) {
-    John.getFriends(function (err, friends) {
-        // assumes rate is another column on table person_friends
-        // you can access it by going to friends[N].extra.rate
-    });
+	John.getFriends(function (err, friends) {
+		// assumes rate is another column on table person_friends
+		// you can access it by going to friends[N].extra.rate
+	});
 });
 ```
 
-If you prefer you can activate `autoFetch`.
-This way associations are automatically fetched when you get or find instances of a model.
+If you prefer you can activate `autoFetch`. This way associations are automatically fetched when you get or find instances of a model.
 
 ```js
 var Person = db.define('person', {
-  name : String
+	name : String
 });
 Person.hasMany("friends", {
     rate : Number
@@ -855,7 +793,7 @@ You can also define this option globally instead of a per association basis.
 
 ```js
 var Person = db.define('person', {
-    name : String
+	name : String
 }, {
     autoFetch : true
 });
@@ -870,38 +808,39 @@ Confusing? Look at the next example.
 
 ```js
 var Pet = db.define('pet', {
-    name : String
+	name : String
 });
 var Person = db.define('person', {
-    name : String
+	name : String
 });
 Pet.hasOne("owner", Person, {
-    reverse : "pets"
+	reverse : "pets"
 });
 
 Person(4).getPets(function (err, pets) {
-    // although the association was made on Pet,
-    // Person will have an accessor (getPets)
-    //
-    // In this example, ORM will fetch all pets
-    // whose owner_id = 4
+	// although the association was made on Pet,
+	// Person will have an accessor (getPets)
+	//
+	// In this example, ORM will fetch all pets
+	// whose owner_id = 4
 });
 ```
 
-This makes even more sense when having `hasMany` associations since you can manage the *many to many*
-associations from both sides.
+This makes even more sense when having `hasMany` associations since you can manage the Many-to-Many associations
+from both sides.
+
 
 ```js
 var Pet = db.define('pet', {
-    name : String
+	name : String
 });
 var Person = db.define('person', {
-    name : String
+	name : String
 });
 Person.hasMany("pets", Pet, {
     bought  : Date
 }, {
-    reverse : "owners"
+	reverse : "owners"
 });
 
 Person(1).getPets(...);
